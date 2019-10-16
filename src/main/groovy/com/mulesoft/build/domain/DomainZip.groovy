@@ -16,11 +16,7 @@
 package com.mulesoft.build.domain
 
 import com.mulesoft.build.MulePluginConvention
-import org.gradle.api.Project
-import org.gradle.api.internal.tasks.options.Option
 import org.gradle.api.tasks.InputFiles
-import org.gradle.api.tasks.Optional
-import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.bundling.Zip
 
 /**
@@ -38,12 +34,11 @@ class DomainZip extends Zip {
 
 
         project.afterEvaluate {
-            this.archiveName = project.mule.resolveDomainName() + '.zip'
+            this.archiveFileName.set(project.mule.resolveDomainName() + '.zip')
         }
 
-            //we'd like to place the results on the build dir.
-        destinationDir = project.buildDir
-
+        //we'd like to place the results on the build dir.
+        destinationDirectory.set(project.buildDir)
 
         //get the plugin convention
         from {

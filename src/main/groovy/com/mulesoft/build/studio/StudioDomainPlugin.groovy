@@ -26,7 +26,10 @@ import org.gradle.api.internal.file.DefaultSourceDirectorySetFactory
 import org.gradle.api.internal.file.collections.DefaultDirectoryFileTreeFactory
 import org.gradle.api.internal.tasks.DefaultSourceSet
 import org.gradle.api.internal.tasks.DefaultSourceSetContainer
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.tasks.SourceSet
+import org.gradle.api.tasks.TaskProvider
+import org.gradle.internal.reflect.Instantiator
 import org.gradle.plugins.ide.api.XmlFileContentMerger
 import org.gradle.plugins.ide.eclipse.EclipsePlugin
 import org.gradle.plugins.ide.eclipse.GenerateEclipseClasspath
@@ -36,6 +39,8 @@ import org.gradle.plugins.ide.eclipse.model.EclipseModel
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import javax.inject.Inject
+
 /**
  * This plugin is a customization of the eclipse plugin that adds specific
  * configurations for MuleStudio projects.
@@ -43,9 +48,16 @@ import org.slf4j.LoggerFactory
  */
 class StudioDomainPlugin implements Plugin<Project> {
 
-
     private static final Logger logger = LoggerFactory.getLogger(StudioPlugin.class)
 
+    private Instantiator instantiator
+    private ObjectFactory objectFactory
+
+    @Inject
+    StudioDomainPlugin(Instantiator instantiator, ObjectFactory objectFactory) {
+        this.instantiator = instantiator
+        this.objectFactory = objectFactory
+    }
 
     @Override
     void apply(Project project) {
@@ -95,7 +107,7 @@ class StudioDomainPlugin implements Plugin<Project> {
         }
 
 
-        Task studioTask = project.task('studio') << {
+        Task studioTask = project.task('studio').doLast  {
             logger.info('Updating mule studio project...')
 
             //get the mule project configuration
@@ -123,25 +135,38 @@ class StudioDomainPlugin implements Plugin<Project> {
         EclipsePlugin ep = project.plugins.getPlugin(EclipsePlugin)
         MulePluginConvention mulePluginConvention = project.convention.getByType(MulePluginConvention)
 
-        GenerateEclipseClasspath eclipseClasspath = project.tasks.create(EclipsePlugin.ECLIPSE_CP_TASK_NAME, GenerateEclipseClasspath)
-        ep.addWorker(eclipseClasspath)
-
-        //add the specific configuration
-        eclipseClasspath.description = "Generates the Eclipse classpath file."
-
-        eclipseClasspath.inputFile = project.file('.classpath')
-        eclipseClasspath.outputFile = project.file('.classpath')
-        eclipseClasspath.classpath = model.classpath
-        eclipseClasspath.classpath.containers 'org.eclipse.jdt.launching.JRE_CONTAINER'
-        eclipseClasspath.classpath.file = new XmlFileContentMerger(eclipseClasspath.xmlTransformer)
-        eclipseClasspath.classpath.plusConfigurations = [project.configurations.testCompile]
-
-        //define the two source sets that are interesting to us.
-        DefaultSourceSet dss = new DefaultSourceSet('main', new DefaultSourceDirectorySetFactory(project.fileResolver, new DefaultDirectoryFileTreeFactory()))
+        DefaultSourceSet dss = instantiator.newInstance(DefaultSourceSet.class, 'main', objectFactory)
 
         dss.resources.srcDirs(mulePluginConvention.domainSourceDir, "src/${dss.name}/resources")
 
-        eclipseClasspath.classpath.sourceSets = [dss]
+        TaskProvider<GenerateEclipseClasspath> eclipseClasspath = project.tasks.register(EclipsePlugin.ECLIPSE_CP_TASK_NAME, GenerateEclipseClasspath)
+        ep.addWorker(eclipseClasspath, EclipsePlugin.ECLIPSE_CP_TASK_NAME)
+
+        eclipseClasspath.configure {
+            //add the specific configuration
+            description = "Generates the Eclipse classpath file."
+
+            inputFile = project.file('.classpath')
+            outputFile = project.file('.classpath')
+            classpath = model.classpath
+            classpath.containers 'org.eclipse.jdt.launching.JRE_CONTAINER'
+            classpath.file = new XmlFileContentMerger(eclipseClasspath.xmlTransformer)
+            classpath.plusConfigurations = [project.configurations.testCompile]
+            classpath.sourceSets = [dss]
+        }
+//        eclipseClasspath.description = "Generates the Eclipse classpath file."
+//
+//        eclipseClasspath.inputFile = project.file('.classpath')
+//        eclipseClasspath.outputFile = project.file('.classpath')
+//        eclipseClasspath.classpath = model.classpath
+//        eclipseClasspath.classpath.containers 'org.eclipse.jdt.launching.JRE_CONTAINER'
+//        eclipseClasspath.classpath.file = new XmlFileContentMerger(eclipseClasspath.xmlTransformer)
+//        eclipseClasspath.classpath.plusConfigurations = [project.configurations.testCompile]
+//
+//        //define the two source sets that are interesting to us.
+//
+//
+//        eclipseClasspath.classpath.sourceSets = [dss]
 
     }
 
